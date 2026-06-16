@@ -266,8 +266,10 @@ function mixColors(color1: string, color2: string, weight: number): string {
 	);
 }
 
+/** Blend `amount` of `tint` into the panel base (curated themes use ~7–10% tint). */
 function tintPanel(bg: string, tint: string, amount: number): string {
-	return mixColors(adjustBrightness(bg, relativeLuminance(bg) < 0.5 ? 8 : -8), tint, amount);
+	const panelBase = adjustBrightness(bg, relativeLuminance(bg) < 0.5 ? 8 : -8);
+	return mixColors(tint, panelBase, amount);
 }
 
 /** Curated-style wiring; light mode uses darker muted/dim and fg-based headings. */

@@ -11,6 +11,7 @@ Goals:
 - **`light:Foo,dark:Bar` pairs**: resolves the active side via macOS appearance (`AppleInterfaceStyle`) or `ghosttyThemeSync.appearance`.
 - **Light themes**: down-rank magenta ANSI slot 5 so Iceberg-style themes don’t go full purple.
 - Optional `accentStrategy`: `auto` (default), `cursor`, `link`, `ansi5` (legacy).
+- **macOS system appearance**: when `appearance` is `auto`, re-syncs on Light/Dark changes (~3s poll).
 
 ## Install
 
