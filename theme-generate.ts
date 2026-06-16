@@ -234,21 +234,22 @@ function pickGray(colors: GhosttyColors, bg: string, fg: string, isDark: boolean
 
 function pickDimText(fg: string, gray: string, isDark: boolean): string {
 	if (isDark) return gray;
-	return mixColors(fg, gray, 0.72);
+	// Light: keep chrome (tool ○, labels) softer — closer to gray than body fg
+	return mixColors(gray, fg, 0.42);
 }
 
-function pickMutedText(fg: string, dim: string, isDark: boolean): string {
+function pickMutedText(fg: string, dim: string, gray: string, isDark: boolean): string {
 	if (isDark) return dim;
-	return mixColors(fg, dim, 0.55);
+	return mixColors(gray, dim, 0.55);
 }
 
-/** Ghostty ANSI green (palette 2); slightly strengthened on light backgrounds for git branch etc. */
+/** Ghostty ANSI green (palette 2). Light: keep terminal green for dots; only nudge if illegible. */
 function pickSuccess(colors: GhosttyColors, bg: string, fg: string, isDark: boolean): string {
-	let s = colors.palette[2] || "#98c379";
-	if (!isDark && contrastRatio(s, bg) < 4.5) {
-		s = mixColors(s, fg, 0.35);
-	}
-	return s;
+	const s = colors.palette[2] || "#98c379";
+	if (isDark) return s;
+	const cr = contrastRatio(s, bg);
+	if (cr >= 3.0) return s;
+	return mixColors(s, fg, 0.2);
 }
 
 function adjustBrightness(hex: string, amount: number): string {
@@ -349,7 +350,7 @@ export function generatePiTheme(
 	const secondary = pickSecondary(colors, accent);
 	const gray = pickGray(colors, bg, fg, isDark);
 	const dim = pickDimText(fg, gray, isDark);
-	const muted = pickMutedText(fg, dim, isDark);
+	const muted = pickMutedText(fg, dim, gray, isDark);
 	const darkGray = adjustBrightness(bg, isDark ? 18 : -18);
 	const white =
 		colors.palette[15] && relativeLuminance(colors.palette[15]) > 0.75
