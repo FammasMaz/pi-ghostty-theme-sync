@@ -16,9 +16,9 @@ Goals:
 ## Install
 
 ```bash
+pi install npm:@fammasmaz/pi-ghostty-theme-sync
+# or from git:
 pi install git:github.com/FammasMaz/pi-ghostty-theme-sync
-# or after npm publish:
-# pi install npm:@fammasmaz/pi-ghostty-theme-sync
 ```
 
 Replace the old package in `~/.pi/agent/settings.json`:

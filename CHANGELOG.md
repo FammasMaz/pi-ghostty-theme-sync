@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.6 — 2026-06-17
+
+### Changed
+
+- **Independent of other extensions**: no hooks into pi-claude-style-tools; always `setTheme` after writing theme file (including when name unchanged) so pi reloads JSON.
+
+## 0.3.5 — 2026-06-17
+
+- Removed: cross-extension palette bust (reverted in 0.3.6).
+
 ## 0.3.4 — 2026-06-17
 
 ### Fixed
