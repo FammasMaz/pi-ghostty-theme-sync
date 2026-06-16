@@ -225,31 +225,39 @@ function pickGray(colors: GhosttyColors, bg: string, fg: string, isDark: boolean
 	const p8 = colors.palette[8];
 	if (p8) {
 		const cr = contrastRatio(p8, bg);
-		if (isDark && cr >= 2.0) return p8;
+		if (isDark && cr >= 2.0) {
+			// Footer / thinking labels: palette[8] alone is often too dim on dark bg
+			return mixColors(fg, p8, 0.52);
+		}
 		if (!isDark && cr >= 3.2) return p8;
 	}
-	// Light: secondary text should stay closer to foreground, not washed-out blue-gray
-	return mixColors(fg, bg, isDark ? 0.55 : 0.82);
+	return mixColors(fg, bg, isDark ? 0.72 : 0.82);
 }
 
 function pickDimText(fg: string, gray: string, isDark: boolean): string {
-	if (isDark) return gray;
-	// Light: keep chrome (tool ○, labels) softer — closer to gray than body fg
+	if (isDark) return mixColors(fg, gray, 0.55);
 	return mixColors(gray, fg, 0.42);
 }
 
 function pickMutedText(fg: string, dim: string, gray: string, isDark: boolean): string {
-	if (isDark) return dim;
+	if (isDark) return mixColors(fg, dim, 0.42);
 	return mixColors(gray, dim, 0.55);
 }
 
-/** Ghostty ANSI green (palette 2). Light: keep terminal green for dots; only nudge if illegible. */
+/** Ghostty ANSI green (palette 2); prefer bright green (10) for footer git when available. */
 function pickSuccess(colors: GhosttyColors, bg: string, fg: string, isDark: boolean): string {
-	const s = colors.palette[2] || "#98c379";
-	if (isDark) return s;
-	const cr = contrastRatio(s, bg);
-	if (cr >= 3.0) return s;
-	return mixColors(s, fg, 0.2);
+	let s = colors.palette[2] || "#98c379";
+	const bright = colors.palette[10];
+	if (isDark && bright && contrastRatio(bright, bg) >= 3.0) {
+		s = bright;
+	} else if (isDark && contrastRatio(s, bg) < 4.5) {
+		s = mixColors(s, fg, 0.18);
+	}
+	if (!isDark) {
+		const cr = contrastRatio(s, bg);
+		if (cr < 3.0) s = mixColors(s, fg, 0.2);
+	}
+	return s;
 }
 
 function adjustBrightness(hex: string, amount: number): string {
@@ -289,7 +297,7 @@ function buildColorsBlock(isDark: boolean): Record<string, string> {
 		muted: "muted",
 		dim: "dim",
 		text: "",
-		thinkingText: "dim",
+		thinkingText: isDark ? "muted" : "dim",
 		selectedBg: "panelInfo",
 		userMessageBg: "panel",
 		userMessageText: "",
@@ -323,8 +331,8 @@ function buildColorsBlock(isDark: boolean): Record<string, string> {
 		syntaxType,
 		syntaxOperator: "error",
 		syntaxPunctuation: "dim",
-		thinkingOff: "darkGray",
-		thinkingMinimal: "dim",
+		thinkingOff: isDark ? "gray" : "darkGray",
+		thinkingMinimal: isDark ? "muted" : "dim",
 		thinkingLow: "accentDark",
 		thinkingMedium: "accentMid",
 		thinkingHigh: "accent",

@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-export const SYNC_ALGO_VERSION = "5";
+export const SYNC_ALGO_VERSION = "6";
 
 export interface GhosttyColors {
 	background: string;
