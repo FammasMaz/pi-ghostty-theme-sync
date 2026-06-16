@@ -221,10 +221,34 @@ export function pickSecondary(colors: GhosttyColors, accent: string): string {
 	return colors.palette[4] || colors.palette[6] || accent;
 }
 
-function pickGray(colors: GhosttyColors, bg: string, fg: string): string {
+function pickGray(colors: GhosttyColors, bg: string, fg: string, isDark: boolean): string {
 	const p8 = colors.palette[8];
-	if (p8 && contrastRatio(p8, bg) >= 2.0) return p8;
-	return mixColors(fg, bg, 0.55);
+	if (p8) {
+		const cr = contrastRatio(p8, bg);
+		if (isDark && cr >= 2.0) return p8;
+		if (!isDark && cr >= 3.2) return p8;
+	}
+	// Light: secondary text should stay closer to foreground, not washed-out blue-gray
+	return mixColors(fg, bg, isDark ? 0.55 : 0.82);
+}
+
+function pickDimText(fg: string, gray: string, isDark: boolean): string {
+	if (isDark) return gray;
+	return mixColors(fg, gray, 0.72);
+}
+
+function pickMutedText(fg: string, dim: string, isDark: boolean): string {
+	if (isDark) return dim;
+	return mixColors(fg, dim, 0.55);
+}
+
+/** Ghostty ANSI green (palette 2); slightly strengthened on light backgrounds for git branch etc. */
+function pickSuccess(colors: GhosttyColors, bg: string, fg: string, isDark: boolean): string {
+	let s = colors.palette[2] || "#98c379";
+	if (!isDark && contrastRatio(s, bg) < 4.5) {
+		s = mixColors(s, fg, 0.35);
+	}
+	return s;
 }
 
 function adjustBrightness(hex: string, amount: number): string {
@@ -246,8 +270,11 @@ function tintPanel(bg: string, tint: string, amount: number): string {
 	return mixColors(adjustBrightness(bg, relativeLuminance(bg) < 0.5 ? 8 : -8), tint, amount);
 }
 
-/** Curated-style `colors` wiring (matches pi-curated-themes template). */
-function buildColorsBlock(): Record<string, string> {
+/** Curated-style wiring; light mode uses darker muted/dim and fg-based headings. */
+function buildColorsBlock(isDark: boolean): Record<string, string> {
+	const heading = isDark ? "white" : "fg";
+	const syntaxType = isDark ? "white" : "fg";
+	const thinkingTop = isDark ? "white" : "fg";
 	return {
 		accent: "accent",
 		border: "gray",
@@ -256,10 +283,10 @@ function buildColorsBlock(): Record<string, string> {
 		success: "success",
 		error: "error",
 		warning: "warning",
-		muted: "gray",
-		dim: "gray",
+		muted: "muted",
+		dim: "dim",
 		text: "",
-		thinkingText: "gray",
+		thinkingText: "dim",
 		selectedBg: "panelInfo",
 		userMessageBg: "panel",
 		userMessageText: "",
@@ -269,36 +296,36 @@ function buildColorsBlock(): Record<string, string> {
 		toolPendingBg: "panelAlt",
 		toolSuccessBg: "panelSuccess",
 		toolErrorBg: "panelError",
-		toolTitle: "white",
+		toolTitle: heading,
 		toolOutput: "fg",
-		mdHeading: "white",
+		mdHeading: heading,
 		mdLink: "secondary",
-		mdLinkUrl: "gray",
+		mdLinkUrl: "dim",
 		mdCode: "accent",
 		mdCodeBlock: "fg",
 		mdCodeBlockBorder: "accentDark",
-		mdQuote: "gray",
+		mdQuote: "dim",
 		mdQuoteBorder: "gray",
 		mdHr: "darkGray",
 		mdListBullet: "accent",
 		toolDiffAdded: "diffAdded",
 		toolDiffRemoved: "diffRemoved",
-		toolDiffContext: "gray",
-		syntaxComment: "gray",
+		toolDiffContext: "dim",
+		syntaxComment: "dim",
 		syntaxKeyword: "accent",
 		syntaxFunction: "secondary",
 		syntaxVariable: "fg",
 		syntaxString: "success",
 		syntaxNumber: "warning",
-		syntaxType: "white",
+		syntaxType,
 		syntaxOperator: "error",
-		syntaxPunctuation: "gray",
+		syntaxPunctuation: "dim",
 		thinkingOff: "darkGray",
-		thinkingMinimal: "gray",
+		thinkingMinimal: "dim",
 		thinkingLow: "accentDark",
 		thinkingMedium: "accentMid",
 		thinkingHigh: "accent",
-		thinkingXhigh: "white",
+		thinkingXhigh: thinkingTop,
 		bashMode: "accent",
 	};
 }
@@ -313,12 +340,14 @@ export function generatePiTheme(
 	const isDark = relativeLuminance(bg) < 0.5;
 
 	const error = colors.palette[1] || "#cc6666";
-	const success = colors.palette[2] || "#98c379";
+	const success = pickSuccess(colors, bg, fg, isDark);
 	const warning = colors.palette[3] || "#e5c07b";
 
 	const { accent, magenta } = pickUiAccent(colors, accentStrategy);
 	const secondary = pickSecondary(colors, accent);
-	const gray = pickGray(colors, bg, fg);
+	const gray = pickGray(colors, bg, fg, isDark);
+	const dim = pickDimText(fg, gray, isDark);
+	const muted = pickMutedText(fg, dim, isDark);
 	const darkGray = adjustBrightness(bg, isDark ? 18 : -18);
 	const white =
 		colors.palette[15] && relativeLuminance(colors.palette[15]) > 0.75
@@ -347,6 +376,8 @@ export function generatePiTheme(
 			bg,
 			fg,
 			gray,
+			dim,
+			muted,
 			darkGray,
 			accent,
 			accentDark,
@@ -365,7 +396,7 @@ export function generatePiTheme(
 			diffRemoved,
 			magenta,
 		},
-		colors: buildColorsBlock(),
+		colors: buildColorsBlock(isDark),
 		export: {
 			pageBg: bg,
 			cardBg: panel,
