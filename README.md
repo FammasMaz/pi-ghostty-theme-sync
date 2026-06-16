@@ -2,15 +2,15 @@
 
 Sync [pi](https://github.com/earendil-works/pi) with your active [Ghostty](https://ghostty.org/) colors — without painting the whole UI ANSI magenta.
 
-Fork/improvement of [@ogulcancelik/pi-ghostty-theme-sync](https://github.com/ogulcancelik/pi-extensions/tree/main/packages/pi-ghostty-theme-sync). The original maps **palette[5] (magenta)** directly to pi’s **`accent`**, which drives borders, list bullets, inline code, thinking levels, and more. Most terminal themes keep purple in slot 5 for shell highlighting, so pi looked purple everywhere.
+Fork/improvement of [@ogulcancelik/pi-ghostty-theme-sync](https://github.com/ogulcancelik/pi-extensions/tree/main/packages/pi-ghostty-theme-sync).
 
-This package:
+Goals:
 
-- Picks a **UI accent** with contrast/saturation heuristics (same idea as [Starship Ghostty sync](https://github.com/FammasMaz/dotfiles/blob/main/lib/sync_starship_ghostty_palette.py) in dotfiles).
-- Prefers **blue / link (palette 4)** for chrome: `borderAccent`, `mdCode`, `mdListBullet`, `customMessageLabel`.
-- Keeps **magenta in `vars.magenta`** for syntax where it belongs; keywords use the chosen UI accent.
-- Supports **`light:…,dark:…`** Ghostty theme pairs via optional appearance override.
-- Bumps theme hash when the mapping algorithm changes so stale themes are regenerated.
+- **Match curated pi themes** (e.g. Jellybeans): same `colors` template as [pi-curated-themes](https://github.com/victor-software-house/pi-curated-themes) — accent on chrome, `secondary` for links, `gray` from palette 8.
+- **UI accent from `cursor-color`** when saturated (Jellybeans orange `#ffa560`), not blind ANSI magenta.
+- **`light:Foo,dark:Bar` pairs**: resolves the active side via macOS appearance (`AppleInterfaceStyle`) or `ghosttyThemeSync.appearance`.
+- **Light themes**: down-rank magenta ANSI slot 5 so Iceberg-style themes don’t go full purple.
+- Optional `accentStrategy`: `auto` (default), `cursor`, `link`, `ansi5` (legacy).
 
 ## Install
 
@@ -43,7 +43,7 @@ In `~/.pi/settings.json` or `~/.pi/agent/settings.json`:
 | Field | Values | Default |
 |--------|--------|---------|
 | `appearance` | `auto`, `light`, `dark` | `auto` — when Ghostty uses `theme = light:Foo,dark:Bar`, `light`/`dark` load that side’s theme file instead of only `+show-config` (macOS often shows the light side in show-config). |
-| `accentStrategy` | `auto`, `link`, `blue`, `cursor` | `auto` — score ANSI colors for contrast/saturation; deprioritize magenta hue; prefer slot 4 when competitive. `link`/`blue` force palette 4. `cursor` uses `cursor-color` when saturated and distinct from fg/bg. |
+| `accentStrategy` | `auto`, `cursor`, `link`, `blue`, `ansi5` | `auto` — `cursor-color` first, else best-scoring ANSI (magenta penalized on **light** bg only). `cursor` — cursor then palette. `link`/`blue` — palette 4. `ansi5` — old behavior (palette 5). |
 
 ## Commands
 

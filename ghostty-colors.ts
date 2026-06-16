@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-export const SYNC_ALGO_VERSION = "2";
+export const SYNC_ALGO_VERSION = "3";
 
 export interface GhosttyColors {
 	background: string;
@@ -16,7 +16,7 @@ export type GhosttyAppearance = "auto" | "light" | "dark";
 
 export interface GhosttySyncSettings {
 	appearance?: GhosttyAppearance;
-	accentStrategy?: "auto" | "link" | "blue" | "cursor";
+	accentStrategy?: "auto" | "link" | "blue" | "cursor" | "ansi5";
 }
 
 const THEME_PAIR_RE = /light\s*:\s*([^,]+?)\s*,\s*dark\s*:\s*(.+?)(?:\s*,\s*|$)/i;
@@ -101,13 +101,46 @@ function findGhosttyThemeFile(themeName: string): string | null {
 	return null;
 }
 
-function resolveAppearance(requested: GhosttyAppearance): "light" | "dark" | null {
+function readMacOsAppearance(): "light" | "dark" | null {
+	if (process.platform !== "darwin") return null;
+	try {
+		const out = execSync("defaults read -g AppleInterfaceStyle 2>/dev/null || true", {
+			encoding: "utf8",
+			timeout: 2000,
+		}).trim();
+		if (!out || out === "null") return "light";
+		if (out.toLowerCase() === "dark") return "dark";
+		return "light";
+	} catch {
+		return null;
+	}
+}
+
+function resolveAppearance(
+	requested: GhosttyAppearance,
+	showConfigBg?: string,
+): "light" | "dark" | null {
 	if (requested === "light" || requested === "dark") return requested;
-	const env = (process.env.GHOSTTY_THEME_APPEARANCE || process.env.COLORFGBG || "").toLowerCase();
-	if (env.includes("light")) return "light";
-	if (env.includes("dark")) return "dark";
-	if (/^1[;:]/.test(process.env.COLORFGBG || "")) return "light";
-	if (/^0[;:]/.test(process.env.COLORFGBG || "")) return "dark";
+
+	const env = (process.env.GHOSTTY_THEME_APPEARANCE || "").toLowerCase();
+	if (env === "light" || env === "dark") return env;
+
+	const mac = readMacOsAppearance();
+	if (mac) return mac;
+
+	const colorfgbg = process.env.COLORFGBG || "";
+	if (/^1[;:]/.test(colorfgbg)) return "light";
+	if (/^0[;:]/.test(colorfgbg)) return "dark";
+
+	if (showConfigBg) {
+		const h = showConfigBg.replace("#", "");
+		const r = parseInt(h.substring(0, 2), 16);
+		const g = parseInt(h.substring(2, 4), 16);
+		const b = parseInt(h.substring(4, 6), 16);
+		const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+		return lum < 0.5 ? "dark" : "light";
+	}
+
 	return null;
 }
 
@@ -164,9 +197,10 @@ export function getGhosttyColors(settings?: GhosttySyncSettings): GhosttyColors 
 	const parsed = parseGhosttyConfigText(output);
 	const { themePair, ...fromShow } = parsed;
 
-	const appearance = resolveAppearance(syncSettings.appearance ?? "auto");
-	if (appearance && themePair) {
-		const themeName = appearance === "dark" ? themePair.dark : themePair.light;
+	const appearance = resolveAppearance(syncSettings.appearance ?? "auto", fromShow.background);
+	if (themePair) {
+		const side = appearance ?? "dark";
+		const themeName = side === "dark" ? themePair.dark : themePair.light;
 		const fromFile = loadThemeFileColors(themeName);
 		if (fromFile) {
 			return fromFile;

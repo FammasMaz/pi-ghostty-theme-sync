@@ -2,15 +2,14 @@ import { createHash } from "node:crypto";
 
 import { type GhosttyColors, SYNC_ALGO_VERSION } from "./ghostty-colors.ts";
 
-export type AccentStrategy = "auto" | "link" | "blue" | "cursor";
+export type AccentStrategy = "auto" | "link" | "blue" | "cursor" | "ansi5";
 
 const DARK_BG_LUM_THRESHOLD = 0.26;
 const LIGHT_ACCENT_MIN_CONTRAST = 4.0;
 const LIGHT_ACCENT_MAX_LUM = 0.35;
 const DARK_ACCENT_MIN_CONTRAST = 3.5;
-const DARK_ACCENT_MAX_LUM = 0.45;
-const MIN_ACCENT_SATURATION = 0.22;
-const CURSOR_MIN_SATURATION = 0.28;
+const DARK_ACCENT_MAX_LUM = 0.55;
+const CURSOR_MIN_SATURATION = 0.25;
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
 	const h = hex.replace("#", "");
@@ -107,14 +106,18 @@ function ensureAccentContrast(color: string, background: string, isDark: boolean
 			: (bgLum + 0.05) / minCr - 0.05;
 		c = scaleLuminance(c, Math.max(0.03, Math.min(maxLum, targetLum)));
 	}
-	if (relativeLuminance(c) > maxLum) {
+	if (!isDark && relativeLuminance(c) > maxLum) {
 		c = scaleLuminance(c, maxLum);
 	}
 	return c;
 }
 
 function isMagentaHue(h: number): boolean {
-	return h >= 270 && h <= 330;
+	return h >= 265 && h <= 335;
+}
+
+function isWarmAccentHue(h: number): boolean {
+	return h >= 15 && h <= 55;
 }
 
 function hueDistance(a: number, b: number): number {
@@ -135,6 +138,28 @@ function isDistinctFromFgBg(hex: string, fg: string, bg: string): boolean {
 	return hex.toLowerCase() !== fg.toLowerCase() && hex.toLowerCase() !== bg.toLowerCase();
 }
 
+function darken(hex: string, amount: number): string {
+	const { r, g, b } = hexToRgb(hex);
+	return rgbToHex(r - amount, g - amount, b - amount);
+}
+
+function scoreAccentCandidate(hex: string, bg: string, isDark: boolean): number {
+	const { h, s, v } = rgbToHsv(hex);
+	const cr = contrastRatio(hex, bg);
+	if (cr < (isDark ? 2.2 : 3.0) || s < 0.1) return -1;
+
+	let score = cr * s * (v + 0.15);
+
+	// Light themes: magenta ANSI slot is usually shell chrome, not UI identity
+	if (!isDark && isMagentaHue(h)) score *= 0.4;
+
+	// Prefer warm accents (Jellybeans cursor orange) and teals over random purple
+	if (isWarmAccentHue(h)) score *= 1.2;
+	if (h >= 160 && h <= 200) score *= 1.08;
+
+	return score;
+}
+
 export function pickUiAccent(
 	colors: GhosttyColors,
 	strategy: AccentStrategy,
@@ -144,51 +169,36 @@ export function pickUiAccent(
 	const isDark = relativeLuminance(bg) < DARK_BG_LUM_THRESHOLD;
 
 	const link = colors.palette[4] || "#61afef";
-	const blue = colors.palette[4] || link;
 	const magenta = colors.palette[5] || "#c678dd";
-	const cyan = colors.palette[6] || "#56b6c2";
-	const warning = colors.palette[3] || "#e5c07b";
 
-	if (strategy === "link") {
+	if (strategy === "ansi5") {
+		return { accent: ensureAccentContrast(magenta, bg, isDark), magenta };
+	}
+	if (strategy === "link" || strategy === "blue") {
 		return { accent: ensureAccentContrast(link, bg, isDark), magenta };
 	}
-	if (strategy === "blue") {
-		return { accent: ensureAccentContrast(blue, bg, isDark), magenta };
-	}
 
-	if (strategy === "cursor" && colors.cursorColor && isDistinctFromFgBg(colors.cursorColor, fg, bg)) {
-		const { s } = rgbToHsv(colors.cursorColor);
-		if (s >= CURSOR_MIN_SATURATION) {
-			return {
-				accent: ensureAccentContrast(colors.cursorColor, bg, isDark),
-				magenta,
-			};
+	if (strategy === "cursor" || strategy === "auto") {
+		if (colors.cursorColor && isDistinctFromFgBg(colors.cursorColor, fg, bg)) {
+			const { s } = rgbToHsv(colors.cursorColor);
+			if (s >= CURSOR_MIN_SATURATION) {
+				return {
+					accent: ensureAccentContrast(colors.cursorColor, bg, isDark),
+					magenta,
+				};
+			}
+		}
+		if (strategy === "cursor") {
+			// fall through to scoring
+		} else {
+			// auto: cursor handled above; continue to palette scoring
 		}
 	}
 
-	const candidates = paletteCandidates(colors);
-	const scored = candidates
-		.map((hex) => {
-			const { h, s, v } = rgbToHsv(hex);
-			const cr = contrastRatio(hex, bg);
-			const magentaPenalty = isMagentaHue(h) ? 0.35 : 1;
-			const satScore = s >= MIN_ACCENT_SATURATION ? s : s * 0.5;
-			const blueBonus = h >= 200 && h <= 260 ? 1.15 : 1;
-			const score = cr * satScore * (v + 0.2) * magentaPenalty * blueBonus;
-			return { hex, h, s, score, cr };
-		})
-		.filter((x) => x.cr >= (isDark ? 2.5 : 3.0) && x.s >= 0.12)
+	const scored = paletteCandidates(colors)
+		.map((hex) => ({ hex, score: scoreAccentCandidate(hex, bg, isDark) }))
+		.filter((x) => x.score > 0)
 		.sort((a, b) => b.score - a.score);
-
-	// Prefer blue (slot 4) when it scores reasonably — matches Iceberg / most themes
-	const slot4 = colors.palette[4];
-	if (slot4) {
-		const s4 = scored.find((x) => x.hex.toLowerCase() === slot4.toLowerCase());
-		const best = scored[0];
-		if (s4 && (!best || s4.score >= best.score * 0.85)) {
-			return { accent: ensureAccentContrast(slot4, bg, isDark), magenta };
-		}
-	}
 
 	if (scored.length > 0) {
 		return { accent: ensureAccentContrast(scored[0].hex, bg, isDark), magenta };
@@ -197,25 +207,24 @@ export function pickUiAccent(
 	return { accent: ensureAccentContrast(link, bg, isDark), magenta };
 }
 
-export function pickAccentAlt(colors: GhosttyColors, accent: string, magenta: string): string {
+export function pickSecondary(colors: GhosttyColors, accent: string): string {
 	const bg = colors.background;
-	const { h: accentHue } = rgbToHsv(accent);
-	const cyan = colors.palette[6];
-	if (cyan && hueDistance(rgbToHsv(cyan).h, accentHue) > 35) {
-		return cyan;
+	const accentHue = rgbToHsv(accent).h;
+	const prefer = [6, 4, 14, 12, 2];
+	for (const idx of prefer) {
+		const c = colors.palette[idx];
+		if (!c) continue;
+		if (hueDistance(rgbToHsv(c).h, accentHue) < 30) continue;
+		if (contrastRatio(c, bg) < 2.5) continue;
+		return c;
 	}
-	if (magenta && hueDistance(rgbToHsv(magenta).h, accentHue) > 40) {
-		return magenta;
-	}
-	const warning = colors.palette[3];
-	if (warning && hueDistance(rgbToHsv(warning).h, accentHue) > 25) {
-		return warning;
-	}
-	return colors.palette[6] || magenta || accent;
+	return colors.palette[4] || colors.palette[6] || accent;
 }
 
-function getLuminance(hex: string): number {
-	return relativeLuminance(hex);
+function pickGray(colors: GhosttyColors, bg: string, fg: string): string {
+	const p8 = colors.palette[8];
+	if (p8 && contrastRatio(p8, bg) >= 2.0) return p8;
+	return mixColors(fg, bg, 0.55);
 }
 
 function adjustBrightness(hex: string, amount: number): string {
@@ -233,6 +242,67 @@ function mixColors(color1: string, color2: string, weight: number): string {
 	);
 }
 
+function tintPanel(bg: string, tint: string, amount: number): string {
+	return mixColors(adjustBrightness(bg, relativeLuminance(bg) < 0.5 ? 8 : -8), tint, amount);
+}
+
+/** Curated-style `colors` wiring (matches pi-curated-themes template). */
+function buildColorsBlock(): Record<string, string> {
+	return {
+		accent: "accent",
+		border: "gray",
+		borderAccent: "accent",
+		borderMuted: "darkGray",
+		success: "success",
+		error: "error",
+		warning: "warning",
+		muted: "gray",
+		dim: "gray",
+		text: "",
+		thinkingText: "gray",
+		selectedBg: "panelInfo",
+		userMessageBg: "panel",
+		userMessageText: "",
+		customMessageBg: "panelAlt",
+		customMessageText: "",
+		customMessageLabel: "accent",
+		toolPendingBg: "panelAlt",
+		toolSuccessBg: "panelSuccess",
+		toolErrorBg: "panelError",
+		toolTitle: "white",
+		toolOutput: "fg",
+		mdHeading: "white",
+		mdLink: "secondary",
+		mdLinkUrl: "gray",
+		mdCode: "accent",
+		mdCodeBlock: "fg",
+		mdCodeBlockBorder: "accentDark",
+		mdQuote: "gray",
+		mdQuoteBorder: "gray",
+		mdHr: "darkGray",
+		mdListBullet: "accent",
+		toolDiffAdded: "diffAdded",
+		toolDiffRemoved: "diffRemoved",
+		toolDiffContext: "gray",
+		syntaxComment: "gray",
+		syntaxKeyword: "accent",
+		syntaxFunction: "secondary",
+		syntaxVariable: "fg",
+		syntaxString: "success",
+		syntaxNumber: "warning",
+		syntaxType: "white",
+		syntaxOperator: "error",
+		syntaxPunctuation: "gray",
+		thinkingOff: "darkGray",
+		thinkingMinimal: "gray",
+		thinkingLow: "accentDark",
+		thinkingMedium: "accentMid",
+		thinkingHigh: "accent",
+		thinkingXhigh: "white",
+		bashMode: "accent",
+	};
+}
+
 export function generatePiTheme(
 	colors: GhosttyColors,
 	themeName: string,
@@ -240,28 +310,34 @@ export function generatePiTheme(
 ): object {
 	const bg = colors.background;
 	const fg = colors.foreground;
-	const isDark = getLuminance(bg) < 0.5;
+	const isDark = relativeLuminance(bg) < 0.5;
 
 	const error = colors.palette[1] || "#cc6666";
 	const success = colors.palette[2] || "#98c379";
 	const warning = colors.palette[3] || "#e5c07b";
-	const link = colors.palette[4] || "#61afef";
 
 	const { accent, magenta } = pickUiAccent(colors, accentStrategy);
-	const accentAlt = pickAccentAlt(colors, accent, magenta);
-	const syntaxMagenta = magenta;
+	const secondary = pickSecondary(colors, accent);
+	const gray = pickGray(colors, bg, fg);
+	const darkGray = adjustBrightness(bg, isDark ? 18 : -18);
+	const white =
+		colors.palette[15] && relativeLuminance(colors.palette[15]) > 0.75
+			? colors.palette[15]
+			: colors.palette[7] || fg;
 
-	const muted = mixColors(fg, bg, 0.65);
-	const dim = mixColors(fg, bg, 0.45);
-	const borderMuted = mixColors(fg, bg, 0.25);
+	const accentDark =
+		relativeLuminance(accent) > 0.45 ? darken(accent, 40) : darken(accent, 22);
+	const accentMid = mixColors(accent, fg, 0.5);
 
-	const bgShift = isDark ? 12 : -12;
-	const selectedBg = adjustBrightness(bg, bgShift);
-	const userMsgBg = adjustBrightness(bg, Math.round(bgShift * 0.7));
-	const toolPendingBg = adjustBrightness(bg, Math.round(bgShift * 0.4));
-	const toolSuccessBg = mixColors(bg, success, 0.88);
-	const toolErrorBg = mixColors(bg, error, 0.88);
-	const customMsgBg = mixColors(bg, accent, 0.92);
+	const panel = adjustBrightness(bg, isDark ? 10 : -10);
+	const panelAlt = adjustBrightness(bg, isDark ? 14 : -14);
+	const panelInfo = adjustBrightness(bg, isDark ? 18 : -18);
+	const panelSuccess = tintPanel(bg, success, 0.07);
+	const panelError = tintPanel(bg, error, 0.1);
+
+	const diffAdded =
+		relativeLuminance(success) > 0.55 ? mixColors(success, fg, 0.35) : success;
+	const diffRemoved = relativeLuminance(error) > 0.55 ? mixColors(error, fg, 0.35) : error;
 
 	return {
 		$schema:
@@ -270,86 +346,30 @@ export function generatePiTheme(
 		vars: {
 			bg,
 			fg,
+			gray,
+			darkGray,
 			accent,
-			accentAlt,
-			link,
-			magenta: syntaxMagenta,
-			error,
+			accentDark,
+			accentMid,
+			secondary,
+			white,
+			panel,
+			panelAlt,
+			panelInfo,
+			panelSuccess,
+			panelError,
 			success,
+			error,
 			warning,
-			muted,
-			dim,
-			borderMuted,
-			selectedBg,
-			userMsgBg,
-			toolPendingBg,
-			toolSuccessBg,
-			toolErrorBg,
-			customMsgBg,
+			diffAdded,
+			diffRemoved,
+			magenta,
 		},
-		colors: {
-			accent: "accent",
-			border: "link",
-			borderAccent: "link",
-			borderMuted: "borderMuted",
-			success: "success",
-			error: "error",
-			warning: "warning",
-			muted: "muted",
-			dim: "dim",
-			text: "",
-			thinkingText: "muted",
-
-			selectedBg: "selectedBg",
-			userMessageBg: "userMsgBg",
-			userMessageText: "",
-			customMessageBg: "customMsgBg",
-			customMessageText: "",
-			customMessageLabel: "link",
-			toolPendingBg: "toolPendingBg",
-			toolSuccessBg: "toolSuccessBg",
-			toolErrorBg: "toolErrorBg",
-			toolTitle: "",
-			toolOutput: "muted",
-
-			mdHeading: "warning",
-			mdLink: "link",
-			mdLinkUrl: "dim",
-			mdCode: "link",
-			mdCodeBlock: "success",
-			mdCodeBlockBorder: "muted",
-			mdQuote: "muted",
-			mdQuoteBorder: "muted",
-			mdHr: "muted",
-			mdListBullet: "link",
-
-			toolDiffAdded: "success",
-			toolDiffRemoved: "error",
-			toolDiffContext: "muted",
-
-			syntaxComment: "muted",
-			syntaxKeyword: "accent",
-			syntaxFunction: "link",
-			syntaxVariable: "accentAlt",
-			syntaxString: "success",
-			syntaxNumber: "accentAlt",
-			syntaxType: "accentAlt",
-			syntaxOperator: "fg",
-			syntaxPunctuation: "muted",
-
-			thinkingOff: "borderMuted",
-			thinkingMinimal: "muted",
-			thinkingLow: "link",
-			thinkingMedium: "accentAlt",
-			thinkingHigh: "accent",
-			thinkingXhigh: "warning",
-
-			bashMode: "success",
-		},
+		colors: buildColorsBlock(),
 		export: {
-			pageBg: isDark ? adjustBrightness(bg, -8) : adjustBrightness(bg, 8),
-			cardBg: bg,
-			infoBg: mixColors(bg, warning, 0.88),
+			pageBg: bg,
+			cardBg: panel,
+			infoBg: panelInfo,
 		},
 	};
 }
