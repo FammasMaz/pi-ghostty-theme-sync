@@ -1,0 +1,38 @@
+{
+  "name": "@fammasmaz/pi-ghostty-theme-sync",
+  "version": "0.2.0",
+  "description": "Sync pi theme with Ghostty — smart UI accent (no forced ANSI magenta)",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "ghostty",
+    "theme",
+    "coding-agent"
+  ],
+  "author": "Fammas Maz",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FammasMaz/pi-ghostty-theme-sync.git"
+  },
+  "bugs": {
+    "url": "https://github.com/FammasMaz/pi-ghostty-theme-sync/issues"
+  },
+  "homepage": "https://github.com/FammasMaz/pi-ghostty-theme-sync#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "files": [
+    "index.ts",
+    "ghostty-colors.ts",
+    "theme-generate.ts",
+    "README.md",
+    "LICENSE"
+  ]
+}
