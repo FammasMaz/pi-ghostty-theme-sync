@@ -1,103 +1,83 @@
 /**
  * Ghostty → pi theme sync with UI-aware accent selection.
- *
- * Fixes the common "everything is purple" issue when ANSI palette[5] (magenta)
- * was mapped directly to pi's `accent` token (used for borders, bullets, thinking, etc.).
- *
- * Accent logic is aligned with the Starship Ghostty palette sync in dotfiles
- * (contrast + saturation), with blue/link preferred for UI chrome.
  */
 
-import { existsSync, mkdirSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { type ExtensionAPI, getAgentDir } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-import { getGhosttyColors, loadGhosttySyncSettings } from "./ghostty-colors.ts";
-import { computeThemeHash, generatePiTheme, type AccentStrategy } from "./theme-generate.ts";
+import { getMacOsSystemAppearance, loadGhosttySyncSettings } from "./ghostty-colors.ts";
+import { syncGhosttyTheme } from "./sync-runner.ts";
 
-const THEME_PREFIX = "ghostty-sync";
+const SYSTEM_APPEARANCE_POLL_MS = 3000;
 
-function cleanupOldGhosttyThemes(themesDir: string, keepFile: string): void {
-	try {
-		for (const file of readdirSync(themesDir)) {
-			if (file === keepFile) continue;
-			if (file === "ghostty-sync.json") {
-				unlinkSync(join(themesDir, file));
-				continue;
-			}
-			if (file.startsWith(`${THEME_PREFIX}-`) && file.endsWith(".json")) {
-				unlinkSync(join(themesDir, file));
-			}
-		}
-	} catch {
-		// best-effort
+function shouldFollowSystemAppearance(): boolean {
+	const settings = loadGhosttySyncSettings();
+	if (settings.appearance === "light" || settings.appearance === "dark") {
+		return false;
 	}
+	if (settings.followSystemAppearance === false) {
+		return false;
+	}
+	return process.platform === "darwin";
 }
 
 export default function (pi: ExtensionAPI) {
+	let appearancePollId: ReturnType<typeof setInterval> | null = null;
+	let lastSystemAppearance: "light" | "dark" | null = null;
+
+	function stopAppearancePoll(): void {
+		if (appearancePollId !== null) {
+			clearInterval(appearancePollId);
+			appearancePollId = null;
+		}
+	}
+
+	function startAppearancePoll(ctx: ExtensionContext): void {
+		stopAppearancePoll();
+		if (!shouldFollowSystemAppearance()) return;
+
+		lastSystemAppearance = getMacOsSystemAppearance();
+
+		appearancePollId = setInterval(() => {
+			const current = getMacOsSystemAppearance();
+			if (!current || current === lastSystemAppearance) return;
+			lastSystemAppearance = current;
+			const result = syncGhosttyTheme(ctx);
+			if (result.ok && result.applied) {
+				ctx.ui.notify(`Ghostty sync → ${result.themeName} (${current} mode)`, "info");
+			}
+		}, SYSTEM_APPEARANCE_POLL_MS);
+	}
+
 	pi.on("session_start", async (_event, ctx) => {
-		const syncSettings = loadGhosttySyncSettings();
-		const colors = getGhosttyColors(syncSettings);
-		if (!colors) {
-			return;
-		}
-
-		const accentStrategy: AccentStrategy = syncSettings.accentStrategy ?? "auto";
-
-		const themesDir = join(getAgentDir(), "themes");
-		if (!existsSync(themesDir)) {
-			mkdirSync(themesDir, { recursive: true });
-		}
-
-		const hash = computeThemeHash(colors, accentStrategy);
-		const themeName = `${THEME_PREFIX}-${hash}`;
-		const themeFile = `${themeName}.json`;
-		const themePath = join(themesDir, themeFile);
-
-		const themeJson = generatePiTheme(colors, themeName, accentStrategy);
-		writeFileSync(themePath, JSON.stringify(themeJson, null, 2) + "\n");
-		cleanupOldGhosttyThemes(themesDir, themeFile);
-
-		if (ctx.ui.theme.name === themeName) {
-			return;
-		}
-
-		const result = ctx.ui.setTheme(themeName);
-		if (!result.success) {
+		const result = syncGhosttyTheme(ctx);
+		if (!result.ok && result.reason === "set_theme_failed") {
 			ctx.ui.notify(`Ghostty theme sync failed: ${result.error}`, "error");
 		}
+		startAppearancePoll(ctx);
+	});
+
+	pi.on("session_shutdown", () => {
+		stopAppearancePoll();
+		lastSystemAppearance = null;
 	});
 
 	pi.registerCommand("ghostty-sync", {
 		description: "Regenerate pi theme from Ghostty and apply it",
 		handler: async (_args, ctx) => {
-			const syncSettings = loadGhosttySyncSettings();
-			const colors = getGhosttyColors(syncSettings);
-			if (!colors) {
-				ctx.ui.notify("Could not read Ghostty config (is `ghostty` in PATH?)", "error");
+			const result = syncGhosttyTheme(ctx);
+			if (!result.ok) {
+				if (result.reason === "ghostty_unavailable") {
+					ctx.ui.notify("Could not read Ghostty config (is `ghostty` in PATH?)", "error");
+				} else {
+					ctx.ui.notify(`Ghostty theme sync failed: ${result.error}`, "error");
+				}
 				return;
 			}
-			const accentStrategy: AccentStrategy = syncSettings.accentStrategy ?? "auto";
-			const themesDir = join(getAgentDir(), "themes");
-			if (!existsSync(themesDir)) mkdirSync(themesDir, { recursive: true });
-
-			const hash = computeThemeHash(colors, accentStrategy);
-			const themeName = `${THEME_PREFIX}-${hash}`;
-			const themeFile = `${themeName}.json`;
-			const themePath = join(themesDir, themeFile);
-
-			writeFileSync(
-				themePath,
-				JSON.stringify(generatePiTheme(colors, themeName, accentStrategy), null, 2) + "\n",
+			ctx.ui.notify(
+				result.applied ? `Applied ${result.themeName}` : `Already on ${result.themeName}`,
+				"success",
 			);
-			cleanupOldGhosttyThemes(themesDir, themeFile);
-
-			const result = ctx.ui.setTheme(themeName);
-			if (!result.success) {
-				ctx.ui.notify(`Ghostty theme sync failed: ${result.error}`, "error");
-				return;
-			}
-			ctx.ui.notify(`Applied ${themeName}`, "success");
+			lastSystemAppearance = getMacOsSystemAppearance();
 		},
 	});
 }

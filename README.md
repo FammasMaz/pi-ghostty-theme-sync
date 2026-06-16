@@ -35,7 +35,8 @@ In `~/.pi/settings.json` or `~/.pi/agent/settings.json`:
 {
   "ghosttyThemeSync": {
     "appearance": "auto",
-    "accentStrategy": "auto"
+    "accentStrategy": "auto",
+    "followSystemAppearance": true
   }
 }
 ```
@@ -43,6 +44,7 @@ In `~/.pi/settings.json` or `~/.pi/agent/settings.json`:
 | Field | Values | Default |
 |--------|--------|---------|
 | `appearance` | `auto`, `light`, `dark` | `auto` — when Ghostty uses `theme = light:Foo,dark:Bar`, `light`/`dark` load that side’s theme file instead of only `+show-config` (macOS often shows the light side in show-config). |
+| `followSystemAppearance` | `true`, `false` | `true` on macOS when `appearance` is `auto` — polls system light/dark every ~3s and re-runs sync (Iceberg ↔ Jellybeans, etc.). Set `false` to only sync at pi startup and `/ghostty-sync`. |
 | `accentStrategy` | `auto`, `cursor`, `link`, `blue`, `ansi5` | `auto` — `cursor-color` first, else best-scoring ANSI (magenta penalized on **light** bg only). `cursor` — cursor then palette. `link`/`blue` — palette 4. `ansi5` — old behavior (palette 5). |
 
 ## Commands

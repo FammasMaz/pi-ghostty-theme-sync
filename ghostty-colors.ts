@@ -17,6 +17,8 @@ export type GhosttyAppearance = "auto" | "light" | "dark";
 export interface GhosttySyncSettings {
 	appearance?: GhosttyAppearance;
 	accentStrategy?: "auto" | "link" | "blue" | "cursor" | "ansi5";
+	/** When true (default), re-sync on macOS light/dark changes while pi is running. */
+	followSystemAppearance?: boolean;
 }
 
 const THEME_PAIR_RE = /light\s*:\s*([^,]+?)\s*,\s*dark\s*:\s*(.+?)(?:\s*,\s*|$)/i;
@@ -101,7 +103,8 @@ function findGhosttyThemeFile(themeName: string): string | null {
 	return null;
 }
 
-function readMacOsAppearance(): "light" | "dark" | null {
+/** Current macOS Aqua appearance (null off-macOS). */
+export function getMacOsSystemAppearance(): "light" | "dark" | null {
 	if (process.platform !== "darwin") return null;
 	try {
 		const out = execSync("defaults read -g AppleInterfaceStyle 2>/dev/null || true", {
@@ -125,7 +128,7 @@ function resolveAppearance(
 	const env = (process.env.GHOSTTY_THEME_APPEARANCE || "").toLowerCase();
 	if (env === "light" || env === "dark") return env;
 
-	const mac = readMacOsAppearance();
+	const mac = getMacOsSystemAppearance();
 	if (mac) return mac;
 
 	const colorfgbg = process.env.COLORFGBG || "";
