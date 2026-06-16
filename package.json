@@ -1,6 +1,6 @@
 {
   "name": "@fammasmaz/pi-ghostty-theme-sync",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Sync pi theme with Ghostty — smart UI accent (no forced ANSI magenta)",
   "type": "module",
   "keywords": [
@@ -34,6 +34,7 @@
     "ghostty-colors.ts",
     "theme-generate.ts",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ]
 }
