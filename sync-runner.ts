@@ -55,6 +55,8 @@ export function syncGhosttyTheme(ctx: ExtensionContext): SyncGhosttyResult {
 	cleanupOldGhosttyThemes(themesDir, themeFile);
 
 	if (ctx.ui.theme.name === themeName) {
+		// Same name but file may have been rewritten (algo bump); still refresh cc-tools palette.
+		bustClaudeStyleToolPalette();
 		return { ok: true, themeName, applied: false };
 	}
 
@@ -62,5 +64,15 @@ export function syncGhosttyTheme(ctx: ExtensionContext): SyncGhosttyResult {
 	if (!result.success) {
 		return { ok: false, reason: "set_theme_failed", error: result.error };
 	}
+	bustClaudeStyleToolPalette();
+	ctx.ui.invalidate?.();
+	ctx.ui.requestRender?.();
 	return { ok: true, themeName, applied: true };
+}
+
+/** pi-claude-style-tools caches border/diff colors per theme object — bust after setTheme. */
+function bustClaudeStyleToolPalette(): void {
+	const bustKey = Symbol.for("pi-claude-style-tools:theme-palette-bust"); // paired with pi-claude-style-tools
+	const n = ((globalThis as any)[bustKey] as number | undefined) ?? 0;
+	(globalThis as any)[bustKey] = n + 1;
 }
