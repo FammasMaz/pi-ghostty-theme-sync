@@ -29,7 +29,7 @@ export type SyncGhosttyResult =
 	| { ok: true; themeName: string; applied: boolean }
 	| { ok: false; reason: "ghostty_unavailable" | "set_theme_failed"; error?: string };
 
-/** Regenerate ghostty-sync theme file and apply when name differs from active theme. */
+/** Regenerate ghostty-sync theme file and apply via setTheme (reloads JSON even when name unchanged). */
 export function syncGhosttyTheme(ctx: ExtensionContext): SyncGhosttyResult {
 	const syncSettings = loadGhosttySyncSettings();
 	const colors = getGhosttyColors(syncSettings);

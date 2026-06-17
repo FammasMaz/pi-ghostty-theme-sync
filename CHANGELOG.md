@@ -1,10 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.3.7 — 2026-06-17
 
 ### Fixed
 
 - **Resume / new session** — deferred `setTheme` on the next tick after `session_start` so the active Ghostty-sync theme is applied after pi reloads the session UI (no dependency on other extensions).
+
+### Changed
+
+- **README** — npm install pin, extension order example, migration from ogulcancelik package.
+- **`/ghostty-sync`** — uses shared `applyGhosttyTheme` helper (same path as session start).
 
 ## 0.3.6 — 2026-06-17
 
@@ -14,7 +19,9 @@
 
 ## 0.3.5 — 2026-06-17
 
-- Removed: cross-extension palette bust (reverted in 0.3.6).
+### Changed
+
+- Removed cross-extension palette bust (reverted in 0.3.6).
 
 ## 0.3.4 — 2026-06-17
 

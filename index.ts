@@ -5,7 +5,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import { getMacOsSystemAppearance, loadGhosttySyncSettings } from "./ghostty-colors.ts";
-import { syncGhosttyTheme } from "./sync-runner.ts";
+import { syncGhosttyTheme, type SyncGhosttyResult } from "./sync-runner.ts";
 
 const SYSTEM_APPEARANCE_POLL_MS = 3000;
 
@@ -48,11 +48,12 @@ export default function (pi: ExtensionAPI) {
 		}, SYSTEM_APPEARANCE_POLL_MS);
 	}
 
-	function applyGhosttyTheme(ctx: ExtensionContext, notifyOnFailure: boolean): void {
+	function applyGhosttyTheme(ctx: ExtensionContext, notifyOnFailure: boolean): SyncGhosttyResult {
 		const result = syncGhosttyTheme(ctx);
 		if (!result.ok && notifyOnFailure && result.reason === "set_theme_failed") {
 			ctx.ui.notify(`Ghostty theme sync failed: ${result.error}`, "error");
 		}
+		return result;
 	}
 
 	pi.on("session_start", async (event, ctx) => {
@@ -75,18 +76,16 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("ghostty-sync", {
 		description: "Regenerate pi theme from Ghostty and apply it",
 		handler: async (_args, ctx) => {
-			const result = syncGhosttyTheme(ctx);
+			const result = applyGhosttyTheme(ctx, true);
 			if (!result.ok) {
 				if (result.reason === "ghostty_unavailable") {
 					ctx.ui.notify("Could not read Ghostty config (is `ghostty` in PATH?)", "error");
-				} else {
-					ctx.ui.notify(`Ghostty theme sync failed: ${result.error}`, "error");
 				}
 				return;
 			}
 			ctx.ui.notify(
 				result.applied ? `Applied ${result.themeName}` : `Already on ${result.themeName}`,
-				"success",
+				"info",
 			);
 			lastSystemAppearance = getMacOsSystemAppearance();
 		},

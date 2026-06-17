@@ -16,16 +16,25 @@ Goals:
 ## Install
 
 ```bash
-pi install npm:@fammasmaz/pi-ghostty-theme-sync
-# or from git:
-pi install git:github.com/FammasMaz/pi-ghostty-theme-sync
+pi install npm:@fammasmaz/pi-ghostty-theme-sync@0.3.7
 ```
 
-Replace the old package in `~/.pi/agent/settings.json`:
+In `~/.pi/agent/settings.json`, register the extension and (if you use tool chrome extensions) list **this package first**:
+
+```json
+{
+  "extensions": [
+    "npm:@fammasmaz/pi-ghostty-theme-sync",
+    "npm:pi-claude-style-tools"
+  ]
+}
+```
+
+Migrating from `@ogulcancelik/pi-ghostty-theme-sync`:
 
 ```diff
 - "npm:@ogulcancelik/pi-ghostty-theme-sync"
-+ "git:github.com/FammasMaz/pi-ghostty-theme-sync"
++ "npm:@fammasmaz/pi-ghostty-theme-sync"
 ```
 
 ## Settings
