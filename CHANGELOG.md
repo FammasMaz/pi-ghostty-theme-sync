@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Resume / new session** — deferred `setTheme` on the next tick after `session_start` so the active Ghostty-sync theme is applied after pi reloads the session UI (no dependency on other extensions).
+
 ## 0.3.6 — 2026-06-17
 
 ### Changed

@@ -48,6 +48,10 @@ In `~/.pi/settings.json` or `~/.pi/agent/settings.json`:
 | `followSystemAppearance` | `true`, `false` | `true` on macOS when `appearance` is `auto` — polls system light/dark every ~3s and re-runs sync (Iceberg ↔ Jellybeans, etc.). Set `false` to only sync at pi startup and `/ghostty-sync`. |
 | `accentStrategy` | `auto`, `cursor`, `link`, `blue`, `ansi5` | `auto` — `cursor-color` first, else best-scoring ANSI (magenta penalized on **light** bg only). `cursor` — cursor then palette. `link`/`blue` — palette 4. `ansi5` — old behavior (palette 5). |
 
+## Using with other extensions (e.g. pi-claude-style-tools)
+
+This package only writes/applies pi theme JSON from Ghostty. It does **not** import or call other extensions. For best results when resuming old chats, list **Ghostty sync before** tool-rendering extensions in `settings.json` so `setTheme` runs first in each `session_start`; cc-tools and similar extensions can rebind their own chrome from `ctx.ui.theme` on their own.
+
 ## Commands
 
 - `/ghostty-sync` — regenerate theme from Ghostty and apply immediately.

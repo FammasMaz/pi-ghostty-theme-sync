@@ -48,12 +48,23 @@ export default function (pi: ExtensionAPI) {
 		}, SYSTEM_APPEARANCE_POLL_MS);
 	}
 
-	pi.on("session_start", async (_event, ctx) => {
+	function applyGhosttyTheme(ctx: ExtensionContext, notifyOnFailure: boolean): void {
 		const result = syncGhosttyTheme(ctx);
-		if (!result.ok && result.reason === "set_theme_failed") {
+		if (!result.ok && notifyOnFailure && result.reason === "set_theme_failed") {
 			ctx.ui.notify(`Ghostty theme sync failed: ${result.error}`, "error");
 		}
+	}
+
+	pi.on("session_start", async (event, ctx) => {
+		// Always regenerate + setTheme from Ghostty (independent of other extensions).
+		applyGhosttyTheme(ctx, true);
 		startAppearancePoll(ctx);
+		const reason = (event as { reason?: string })?.reason;
+		// After /resume another extension may still be painting; re-apply current
+		// Ghostty theme on the next tick so pi's active theme matches the terminal.
+		if (reason === "resume" || reason === "new" || reason === "fork" || reason === "startup") {
+			setTimeout(() => applyGhosttyTheme(ctx, false), 0);
+		}
 	});
 
 	pi.on("session_shutdown", () => {
